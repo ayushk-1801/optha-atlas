@@ -11,6 +11,21 @@ export interface DiseaseCounts {
   images: number;
 }
 
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+/** Paginated wrapper returned for each linked entity */
+export interface PaginatedEntity<T> {
+  data: Array<T>;
+  pagination: PaginationMeta;
+}
+
 export interface Disease {
   disease_id: number;
   name: string;
@@ -93,22 +108,14 @@ export interface ImageDataset {
   created_at: string | null;
 }
 
+/** Disease detail — each linked entity is now a paginated wrapper */
 export interface DiseaseDetail extends Disease {
-  genes?: Array<Gene>;
-  proteins?: Array<Protein>;
-  clinvar?: Array<ClinVarEntry>;
-  geo?: Array<GeoDataset>;
-  pathways?: Array<Pathway>;
-  images?: Array<ImageDataset>;
-}
-
-export interface PaginationMeta {
-  total: number;
-  page: number;
-  limit: number;
-  total_pages: number;
-  has_next: boolean;
-  has_prev: boolean;
+  genes?: PaginatedEntity<Gene>;
+  proteins?: PaginatedEntity<Protein>;
+  clinvar?: PaginatedEntity<ClinVarEntry>;
+  geo?: PaginatedEntity<GeoDataset>;
+  pathways?: PaginatedEntity<Pathway>;
+  images?: PaginatedEntity<ImageDataset>;
 }
 
 export interface SearchResult {
@@ -135,12 +142,14 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 /**
  * Search diseases by name and optionally include linked data.
+ * Supports per-entity pagination via entityPagination.
  */
 export function searchDiseases(
   query: string,
   include: Array<EntityType> | "all" = "all",
   page = 1,
   limit = 10,
+  entityPagination?: Partial<Record<EntityType, { page: number; limit: number }>>,
 ): Promise<SearchResult> {
   const params = new URLSearchParams({
     q: query,
@@ -152,6 +161,12 @@ export function searchDiseases(
   } else {
     for (const inc of include) {
       params.append("include", inc);
+    }
+  }
+  if (entityPagination) {
+    for (const [key, val] of Object.entries(entityPagination)) {
+      params.set(`${key}_page`, String(val.page));
+      params.set(`${key}_limit`, String(val.limit));
     }
   }
   return fetchJson<SearchResult>(`${API_BASE}/search?${params}`);
@@ -174,11 +189,12 @@ export function searchDiseasesLight(
 }
 
 /**
- * Get a single disease by ID with selected includes.
+ * Get a single disease by ID with selected includes and per-entity pagination.
  */
 export function getDiseaseById(
   diseaseId: number,
   include: Array<EntityType> | "all" = "all",
+  entityPagination?: Partial<Record<EntityType, { page: number; limit: number }>>,
 ): Promise<DiseaseDetail> {
   const params = new URLSearchParams();
   if (include === "all") {
@@ -188,20 +204,50 @@ export function getDiseaseById(
       params.append("include", inc);
     }
   }
+  if (entityPagination) {
+    for (const [key, val] of Object.entries(entityPagination)) {
+      params.set(`${key}_page`, String(val.page));
+      params.set(`${key}_limit`, String(val.limit));
+    }
+  }
   return fetchJson<DiseaseDetail>(`${API_BASE}/diseases/${diseaseId}?${params}`);
 }
 
 /**
- * Get a single disease by exact name match (searches and returns the first match).
- * Falls back to partial match.
+ * Get a single disease by exact name match.
+ * Only fetches counts (no includes) for the overview page.
  */
 export async function getDiseaseByName(
   name: string,
-  include: Array<EntityType> | "all" = "all",
+): Promise<Disease | null> {
+  const searchName = name.replace(/-/g, " ");
+  const result = await searchDiseasesLight(searchName, 1, 50);
+  const normalized = searchName.toLowerCase();
+  const exact = result.diseases.find(
+    (d) => d.name.toLowerCase() === normalized,
+  );
+  if (exact) return exact;
+  return result.diseases[0] ?? null;
+}
+
+/**
+ * Get a disease by name with a specific entity type paginated.
+ */
+export async function getDiseaseEntityPage(
+  name: string,
+  entityType: EntityType,
+  page: number,
+  limit: number,
 ): Promise<DiseaseDetail | null> {
-  const result = await searchDiseases(name, include === "all" ? "all" : include, 1, 50);
-  // Try exact match first (case-insensitive)
-  const normalized = name.toLowerCase().replace(/-/g, " ");
+  const searchName = name.replace(/-/g, " ");
+  const result = await searchDiseases(
+    searchName,
+    [entityType],
+    1,
+    50,
+    { [entityType]: { page, limit } },
+  );
+  const normalized = searchName.toLowerCase();
   const exact = result.results.find(
     (d) => d.name.toLowerCase() === normalized,
   );

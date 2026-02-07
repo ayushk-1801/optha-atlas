@@ -13,6 +13,7 @@ import Paper from '@mui/material/Paper'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
 import Link from '@mui/material/Link'
 import CircularProgress from '@mui/material/CircularProgress'
+import Skeleton from '@mui/material/Skeleton'
 import Alert from '@mui/material/Alert'
 import Chip from '@mui/material/Chip'
 import Tooltip from '@mui/material/Tooltip'
@@ -36,10 +37,11 @@ import type {
   Gene,
   GeoDataset,
   ImageDataset,
+  PaginationMeta,
   Pathway,
   Protein,
 } from '@/api'
-import { getDiseaseByName } from '@/api'
+import { getDiseaseEntityPage } from '@/api'
 
 export const Route = createFileRoute('/disease/$name/$type/')({
   component: RouteComponent,
@@ -279,9 +281,10 @@ function applyFilters(
 function RouteComponent() {
   const { name, type } = Route.useParams()
   const [disease, setDisease] = useState<DiseaseDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [pageLoading, setPageLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(0)
+  const [page, setPage] = useState(0) // 0-indexed for MUI
   const [rowsPerPage, setRowsPerPage] = useState(25)
   const [filters, setFilters] = useState<Record<string, string>>({})
 
@@ -289,17 +292,22 @@ function RouteComponent() {
   const columns = COLUMN_MAP[entityType] as Array<ColumnDef<any>> | undefined
   const filterDefs = FILTER_MAP[entityType] ?? []
 
+  // Fetch data whenever page, rowsPerPage, or entity type changes (server-side pagination)
   useEffect(() => {
     if (!columns) {
       setError(`Unknown data type: ${type}`)
-      setLoading(false)
+      setInitialLoading(false)
       return
     }
 
-    setLoading(true)
+    const isInitial = !disease
+    if (isInitial) {
+      setInitialLoading(true)
+    } else {
+      setPageLoading(true)
+    }
     setError(null)
-    setFilters({})
-    getDiseaseByName(name, [entityType])
+    getDiseaseEntityPage(name, entityType, page + 1, rowsPerPage) // API is 1-indexed
       .then((data) => {
         if (!data) {
           setError('Disease not found')
@@ -308,31 +316,50 @@ function RouteComponent() {
         }
       })
       .catch((err) => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [name, type, entityType, columns])
+      .finally(() => {
+        setInitialLoading(false)
+        setPageLoading(false)
+      })
+  }, [name, type, entityType, columns, page, rowsPerPage])
 
-  const allRows: Array<Record<string, any>> = disease ? ((disease as any)[entityType] ?? []) : []
+  // Reset page & filters when navigating to a different entity type
+  useEffect(() => {
+    setPage(0)
+    setFilters({})
+  }, [entityType])
+
+  // Extract entity wrapper { data, pagination }
+  const entityWrapper = disease ? (disease as any)[entityType] : undefined
+  const allRows: Array<Record<string, any>> = entityWrapper?.data ?? []
+  const serverPagination: PaginationMeta | undefined = entityWrapper?.pagination
 
   const filteredRows = useMemo(
     () => applyFilters(allRows, filters, entityType),
     [allRows, filters, entityType],
   )
 
-  const paginatedRows = filteredRows.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-
   const activeFilterCount = Object.values(filters).filter(Boolean).length
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
-    setPage(0)
   }
 
   const handleClearFilters = () => {
     setFilters({})
-    setPage(0)
   }
 
-  if (loading) {
+  const handlePageChange = (_: unknown, newPage: number) => {
+    setPage(newPage)
+    setFilters({}) // clear client-side filters on page change
+  }
+
+  const handleRowsPerPageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(e.target.value, 10))
+    setPage(0)
+    setFilters({})
+  }
+
+  if (initialLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
         <CircularProgress />
@@ -351,7 +378,7 @@ function RouteComponent() {
   if (!disease) return null
   if (!columns) return null
 
-  const totalCount = disease.counts[entityType]
+  const totalCount = serverPagination?.total ?? disease.counts[entityType]
 
   return (
     <Box>
@@ -380,9 +407,9 @@ function RouteComponent() {
       </Typography>
 
       {/* Content: Filters + Table */}
-      {allRows.length === 0 ? (
+      {totalCount === 0 ? (
         <Alert severity="info" sx={{ mt: 2 }}>
-          No {TYPE_TITLES[entityType].toLowerCase()} data found for this disease.
+          No {(TYPE_TITLES[entityType] ?? type).toLowerCase()} data found for this disease.
         </Alert>
       ) : (
         <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
@@ -472,7 +499,7 @@ function RouteComponent() {
               <>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Showing {filteredRows.length} of {allRows.length}
+                  Showing {filteredRows.length} of {allRows.length} on this page
                 </Typography>
               </>
             )}
@@ -504,41 +531,51 @@ function RouteComponent() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {paginatedRows.map((row, index) => (
-                        <TableRow
-                          key={row.id ?? index}
-                          sx={{
-                            '&:hover': { bgcolor: 'grey.50' },
-                            '&:last-child td': { borderBottom: 0 },
-                          }}
-                        >
-                          <TableCell sx={{ color: 'text.secondary' }}>
-                            {page * rowsPerPage + index + 1}
-                          </TableCell>
-                          {columns.map((col) => (
-                            <TableCell key={String(col.key)}>
-                              {col.render ? (
-                                col.render(row)
-                              ) : (
-                                <CellValue value={row[col.key as string]} />
-                              )}
-                            </TableCell>
+                      {pageLoading
+                        ? Array.from({ length: rowsPerPage }).map((_, i) => (
+                            <TableRow key={`skeleton-${String(i)}`}>
+                              <TableCell>
+                                <Skeleton variant="text" width={30} />
+                              </TableCell>
+                              {columns.map((col) => (
+                                <TableCell key={String(col.key)}>
+                                  <Skeleton variant="text" />
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))
+                        : filteredRows.map((row, index) => (
+                            <TableRow
+                              key={row.id ?? index}
+                              sx={{
+                                '&:hover': { bgcolor: 'grey.50' },
+                                '&:last-child td': { borderBottom: 0 },
+                              }}
+                            >
+                              <TableCell sx={{ color: 'text.secondary' }}>
+                                {page * rowsPerPage + index + 1}
+                              </TableCell>
+                              {columns.map((col) => (
+                                <TableCell key={String(col.key)}>
+                                  {col.render ? (
+                                    col.render(row)
+                                  ) : (
+                                    <CellValue value={row[col.key as string]} />
+                                  )}
+                                </TableCell>
+                              ))}
+                            </TableRow>
                           ))}
-                        </TableRow>
-                      ))}
                     </TableBody>
                   </Table>
                 </TableContainer>
                 <TablePagination
                   component="div"
-                  count={filteredRows.length}
+                  count={totalCount}
                   page={page}
-                  onPageChange={(_, newPage) => setPage(newPage)}
+                  onPageChange={handlePageChange}
                   rowsPerPage={rowsPerPage}
-                  onRowsPerPageChange={(e) => {
-                    setRowsPerPage(parseInt(e.target.value, 10))
-                    setPage(0)
-                  }}
+                  onRowsPerPageChange={handleRowsPerPageChange}
                   rowsPerPageOptions={[10, 25, 50, 100]}
                 />
               </Paper>

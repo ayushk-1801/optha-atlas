@@ -10,7 +10,7 @@ import Link from '@mui/material/Link'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 import Chip from '@mui/material/Chip'
-import type { DiseaseDetail, EntityType } from '@/api'
+import type { Disease, EntityType } from '@/api'
 import { getDiseaseByName } from '@/api'
 
 export const Route = createFileRoute('/disease/$name/')({
@@ -28,14 +28,14 @@ const dataCards: Array<{ title: string; key: EntityType; icon: string; color: st
 
 function RouteComponent() {
   const { name } = Route.useParams()
-  const [disease, setDisease] = useState<DiseaseDetail | null>(null)
+  const [disease, setDisease] = useState<Disease | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
-    getDiseaseByName(name, 'all')
+    getDiseaseByName(name)
       .then((data) => {
         if (!data) {
           setError('Disease not found')
