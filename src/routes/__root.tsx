@@ -2,13 +2,15 @@ import { Outlet, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
-import Header from '../components/Header'
+import { Navbar } from '@/components/navbar'
 
 export const Route = createRootRoute({
   component: () => (
     <>
-      <Header />
-      <Outlet />
+      <Navbar />
+      <div style={{ padding: '2rem 3rem', maxWidth: 1400, margin: '0 auto' }}>
+        <Outlet />
+      </div>
       <TanStackDevtools
         config={{
           position: 'bottom-right',
