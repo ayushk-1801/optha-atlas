@@ -24,6 +24,13 @@ export interface PaginationMeta {
 export interface PaginatedEntity<T> {
   data: Array<T>;
   pagination: PaginationMeta;
+  applied_filters?: Record<string, string>;
+}
+
+export interface FilterMetadata {
+  entity: string;
+  disease_id?: number;
+  filters: Record<string, Array<string>>;
 }
 
 export interface Disease {
@@ -41,7 +48,6 @@ export interface Gene {
   symbol: string | null;
   description: string | null;
   summary: string | null;
-  status: string | null;
   synonyms: string | null;
   chromosome: string | null;
   map_location: string | null;
@@ -82,9 +88,7 @@ export interface GeoDataset {
   title: string | null;
   summary: string | null;
   taxon: string | null;
-  entry_type: string | null;
   sample_count: number | null;
-  release_date: string | null;
   platform_title: string | null;
 }
 
@@ -231,22 +235,49 @@ export async function getDiseaseByName(
 }
 
 /**
- * Get a disease by name with a specific entity type paginated.
+ * Get unique filter values for an entity scoped to a disease.
+ */
+export function getEntityFilters(
+  diseaseId: number,
+  entityType: EntityType,
+): Promise<FilterMetadata> {
+  return fetchJson<FilterMetadata>(
+    `${API_BASE}/diseases/${diseaseId}/${entityType}/filters`,
+  );
+}
+
+/**
+ * Get a disease by name with a specific entity type paginated and filtered.
  */
 export async function getDiseaseEntityPage(
   name: string,
   entityType: EntityType,
   page: number,
   limit: number,
+  filters?: Record<string, string>,
 ): Promise<DiseaseDetail | null> {
   const searchName = name.replace(/-/g, " ");
-  const result = await searchDiseases(
-    searchName,
-    [entityType],
-    1,
-    50,
-    { [entityType]: { page, limit } },
-  );
+  
+  // Build query params including filters
+  const params = new URLSearchParams({
+    q: searchName,
+    page: "1",
+    limit: "50",
+    include: entityType,
+    [`${entityType}_page`]: String(page),
+    [`${entityType}_limit`]: String(limit),
+  });
+  
+  // Add entity-specific filters
+  if (filters) {
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) {
+        params.set(`${entityType}_${key}`, value);
+      }
+    }
+  }
+  
+  const result = await fetchJson<SearchResult>(`${API_BASE}/search?${params}`);
   const normalized = searchName.toLowerCase();
   const exact = result.results.find(
     (d) => d.name.toLowerCase() === normalized,
@@ -260,4 +291,188 @@ export async function getDiseaseEntityPage(
  */
 export function getStats(): Promise<DiseaseCounts & { diseases: number }> {
   return fetchJson(`${API_BASE}/stats`);
+}
+
+/**
+ * Get health check status.
+ */
+export function getHealth(): Promise<{
+  status: string;
+  database: string;
+  pool_size: number;
+  checked_out: number;
+}> {
+  return fetchJson(`${API_BASE}/health`);
+}
+
+// ── Entity List/Detail Functions ─────────────────────────────────────────────
+
+/**
+ * List genes with optional search.
+ */
+export function listGenes(
+  query?: string,
+  page = 1,
+  limit = 50,
+): Promise<{
+  pagination: PaginationMeta;
+  genes: Array<Gene>;
+}> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (query) params.set("q", query);
+  return fetchJson(`${API_BASE}/genes?${params}`);
+}
+
+/**
+ * Get a single gene with associated diseases.
+ */
+export function getGeneById(geneId: number): Promise<Gene & { diseases: Array<Disease> }> {
+  return fetchJson(`${API_BASE}/genes/${geneId}`);
+}
+
+/**
+ * List proteins with optional search.
+ */
+export function listProteins(
+  query?: string,
+  page = 1,
+  limit = 50,
+): Promise<{
+  pagination: PaginationMeta;
+  proteins: Array<Protein>;
+}> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (query) params.set("q", query);
+  return fetchJson(`${API_BASE}/proteins?${params}`);
+}
+
+/**
+ * Get a single protein with associated diseases.
+ */
+export function getProteinById(proteinId: number): Promise<Protein & { diseases: Array<Disease> }> {
+  return fetchJson(`${API_BASE}/proteins/${proteinId}`);
+}
+
+/**
+ * List ClinVar variants with optional search.
+ */
+export function listClinVar(
+  query?: string,
+  page = 1,
+  limit = 50,
+): Promise<{
+  pagination: PaginationMeta;
+  clinvar: Array<ClinVarEntry>;
+}> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (query) params.set("q", query);
+  return fetchJson(`${API_BASE}/clinvar?${params}`);
+}
+
+/**
+ * Get a single ClinVar variant with associated diseases.
+ */
+export function getClinVarById(clinvarId: number): Promise<ClinVarEntry & { diseases: Array<Disease> }> {
+  return fetchJson(`${API_BASE}/clinvar/${clinvarId}`);
+}
+
+/**
+ * List GEO datasets with optional search.
+ */
+export function listGeo(
+  query?: string,
+  page = 1,
+  limit = 50,
+): Promise<{
+  pagination: PaginationMeta;
+  geo: Array<GeoDataset>;
+}> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (query) params.set("q", query);
+  return fetchJson(`${API_BASE}/geo?${params}`);
+}
+
+/**
+ * Get a single GEO dataset with associated diseases.
+ */
+export function getGeoById(geoId: number): Promise<GeoDataset & { diseases: Array<Disease> }> {
+  return fetchJson(`${API_BASE}/geo/${geoId}`);
+}
+
+/**
+ * List pathways with optional search.
+ */
+export function listPathways(
+  query?: string,
+  page = 1,
+  limit = 50,
+): Promise<{
+  pagination: PaginationMeta;
+  pathways: Array<Pathway>;
+}> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (query) params.set("q", query);
+  return fetchJson(`${API_BASE}/pathways?${params}`);
+}
+
+/**
+ * Get a single pathway with associated diseases.
+ */
+export function getPathwayById(pathwayId: number): Promise<Pathway & { diseases: Array<Disease> }> {
+  return fetchJson(`${API_BASE}/pathways/${pathwayId}`);
+}
+
+/**
+ * List image datasets with optional search and platform filter.
+ */
+export function listImages(
+  query?: string,
+  platform?: string,
+  page = 1,
+  limit = 50,
+): Promise<{
+  pagination: PaginationMeta;
+  images: Array<ImageDataset>;
+}> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
+  if (query) params.set("q", query);
+  if (platform) params.set("platform", platform);
+  return fetchJson(`${API_BASE}/images?${params}`);
+}
+
+/**
+ * Get a single image dataset with associated diseases.
+ */
+export function getImageById(imageId: number): Promise<ImageDataset & { diseases: Array<Disease> }> {
+  return fetchJson(`${API_BASE}/images/${imageId}`);
+}
+
+/**
+ * Get unique filter values for an entity across all records (global).
+ */
+export function getGlobalEntityFilters(
+  entityType: EntityType,
+): Promise<{
+  entity: string;
+  filters: Record<string, Array<string>>;
+}> {
+  return fetchJson(`${API_BASE}/${entityType}/filters`);
 }

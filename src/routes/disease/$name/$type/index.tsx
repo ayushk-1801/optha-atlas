@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Table from '@mui/material/Table'
@@ -34,6 +34,7 @@ import type {
   ClinVarEntry,
   DiseaseDetail,
   EntityType,
+  FilterMetadata,
   Gene,
   GeoDataset,
   ImageDataset,
@@ -41,7 +42,7 @@ import type {
   Pathway,
   Protein,
 } from '@/api'
-import { getDiseaseEntityPage } from '@/api'
+import { getDiseaseEntityPage, getEntityFilters } from '@/api'
 
 export const Route = createFileRoute('/disease/$name/$type/')({
   component: RouteComponent,
@@ -62,7 +63,6 @@ const GENE_COLUMNS: Array<ColumnDef<Gene>> = [
   { key: 'description', label: 'Description' },
   { key: 'chromosome', label: 'Chr', width: 60 },
   { key: 'map_location', label: 'Map Location', width: 120 },
-  { key: 'status', label: 'Status', width: 100 },
 ]
 
 const PROTEIN_COLUMNS: Array<ColumnDef<Protein>> = [
@@ -86,9 +86,23 @@ const GEO_COLUMNS: Array<ColumnDef<GeoDataset>> = [
   { key: 'accession', label: 'Accession', width: 110 },
   { key: 'title', label: 'Title' },
   { key: 'taxon', label: 'Taxon', width: 120 },
-  { key: 'entry_type', label: 'Type', width: 80 },
   { key: 'sample_count', label: 'Samples', width: 80 },
-  { key: 'release_date', label: 'Released', width: 100 },
+  {
+    key: 'accession',
+    label: 'Link',
+    width: 70,
+    render: (row) => (
+      <IconButton
+        size="small"
+        component="a"
+        href={`https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${row.accession}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <OpenInNewIcon fontSize="small" />
+      </IconButton>
+    ),
+  },
 ]
 
 const PATHWAY_COLUMNS: Array<ColumnDef<Pathway>> = [
@@ -208,7 +222,6 @@ const FILTER_MAP: Record<string, Array<FilterDef>> = {
   genes: [
     { key: '_search', label: 'Search', type: 'text' },
     { key: 'chromosome', label: 'Chromosome', type: 'select', optionsFrom: 'chromosome' },
-    { key: 'status', label: 'Status', type: 'select', optionsFrom: 'status' },
   ],
   proteins: [
     { key: '_search', label: 'Search', type: 'text' },
@@ -222,7 +235,6 @@ const FILTER_MAP: Record<string, Array<FilterDef>> = {
   geo: [
     { key: '_search', label: 'Search', type: 'text' },
     { key: 'taxon', label: 'Taxon', type: 'select', optionsFrom: 'taxon' },
-    { key: 'entry_type', label: 'Entry Type', type: 'select', optionsFrom: 'entry_type' },
   ],
   pathways: [
     { key: '_search', label: 'Search', type: 'text' },
@@ -233,54 +245,10 @@ const FILTER_MAP: Record<string, Array<FilterDef>> = {
   ],
 }
 
-/** Text fields to search against for the free-text _search filter */
-const SEARCH_FIELDS: Record<string, Array<string>> = {
-  genes: ['gene_id', 'symbol', 'description', 'synonyms'],
-  proteins: ['accession', 'definition'],
-  clinvar: ['uid', 'title', 'gene_symbols', 'protein_change'],
-  geo: ['accession', 'title'],
-  pathways: ['pathway_id', 'pathway_name'],
-  images: ['dataset_link', 'source_platform'],
-}
-
-function extractUniqueOptions(rows: Array<Record<string, any>>, field: string): Array<string> {
-  const set = new Set<string>()
-  for (const row of rows) {
-    const val = row[field]
-    if (val != null && String(val).trim() !== '') {
-      set.add(String(val).trim())
-    }
-  }
-  return Array.from(set).sort()
-}
-
-function applyFilters(
-  rows: Array<Record<string, any>>,
-  filters: Record<string, string>,
-  entityType: string,
-): Array<Record<string, any>> {
-  return rows.filter((row) => {
-    for (const [key, value] of Object.entries(filters)) {
-      if (!value) continue
-      if (key === '_search') {
-        const fields = SEARCH_FIELDS[entityType] ?? []
-        const q = value.toLowerCase()
-        const match = fields.some((f) => {
-          const v = row[f]
-          return v != null && String(v).toLowerCase().includes(q)
-        })
-        if (!match) return false
-      } else {
-        if (String(row[key] ?? '') !== value) return false
-      }
-    }
-    return true
-  })
-}
-
 function RouteComponent() {
   const { name, type } = Route.useParams()
   const [disease, setDisease] = useState<DiseaseDetail | null>(null)
+  const [filterMetadata, setFilterMetadata] = useState<FilterMetadata | null>(null)
   const [initialLoading, setInitialLoading] = useState(true)
   const [pageLoading, setPageLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -292,7 +260,16 @@ function RouteComponent() {
   const columns = COLUMN_MAP[entityType] as Array<ColumnDef<any>> | undefined
   const filterDefs = FILTER_MAP[entityType] ?? []
 
-  // Fetch data whenever page, rowsPerPage, or entity type changes (server-side pagination)
+  // Fetch filter metadata once on mount or entity type change
+  useEffect(() => {
+    if (!disease?.disease_id) return
+    
+    getEntityFilters(disease.disease_id, entityType)
+      .then(setFilterMetadata)
+      .catch((err) => console.error('Failed to load filters:', err))
+  }, [disease?.disease_id, entityType])
+
+  // Fetch data whenever page, rowsPerPage, filters, or entity type changes (server-side pagination & filtering)
   useEffect(() => {
     if (!columns) {
       setError(`Unknown data type: ${type}`)
@@ -307,7 +284,7 @@ function RouteComponent() {
       setPageLoading(true)
     }
     setError(null)
-    getDiseaseEntityPage(name, entityType, page + 1, rowsPerPage) // API is 1-indexed
+    getDiseaseEntityPage(name, entityType, page + 1, rowsPerPage, filters) // API is 1-indexed
       .then((data) => {
         if (!data) {
           setError('Disease not found')
@@ -320,7 +297,7 @@ function RouteComponent() {
         setInitialLoading(false)
         setPageLoading(false)
       })
-  }, [name, type, entityType, columns, page, rowsPerPage])
+  }, [name, type, entityType, columns, page, rowsPerPage, filters])
 
   // Reset page & filters when navigating to a different entity type
   useEffect(() => {
@@ -333,24 +310,23 @@ function RouteComponent() {
   const allRows: Array<Record<string, any>> = entityWrapper?.data ?? []
   const serverPagination: PaginationMeta | undefined = entityWrapper?.pagination
 
-  const filteredRows = useMemo(
-    () => applyFilters(allRows, filters, entityType),
-    [allRows, filters, entityType],
-  )
+  // Filters are now server-side, no client-side filtering needed
+  const filteredRows = allRows
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
+    setPage(0) // Reset to first page when filter changes
   }
 
   const handleClearFilters = () => {
     setFilters({})
+    setPage(0)
   }
 
   const handlePageChange = (_: unknown, newPage: number) => {
     setPage(newPage)
-    setFilters({}) // clear client-side filters on page change
   }
 
   const handleRowsPerPageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -472,7 +448,10 @@ function RouteComponent() {
                   )
                 }
 
-                const options = extractUniqueOptions(allRows, fd.optionsFrom ?? fd.key)
+                // Get options from server-side filter metadata
+                const fieldKey = fd.optionsFrom ?? fd.key
+                const options = filterMetadata?.filters[fieldKey] ?? []
+                
                 return (
                   <FormControl key={fd.key} size="small" fullWidth>
                     <InputLabel>{fd.label}</InputLabel>
@@ -499,7 +478,7 @@ function RouteComponent() {
               <>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Showing {filteredRows.length} of {allRows.length} on this page
+                  {filteredRows.length} results{serverPagination && ` of ${serverPagination.total} total`}
                 </Typography>
               </>
             )}
