@@ -476,3 +476,47 @@ export function getGlobalEntityFilters(
 }> {
   return fetchJson(`${API_BASE}/${entityType}/filters`);
 }
+
+// ── Paper Search ─────────────────────────────────────────────────────────────
+
+export interface PaperSearchRequest {
+  disease: string;
+  gene: string;
+  limit?: number;
+  include_summary?: boolean;
+}
+
+export interface Paper {
+  title: string;
+  authors: Array<string>;
+  abstract: string | null;
+  summary: string | null;
+  url: string;
+  source: string;
+  relevance_score: number;
+  publication_date: string | null;
+}
+
+export interface PaperSearchResponse {
+  disease: string;
+  gene: string;
+  papers: Array<Paper>;
+  total_results: number;
+}
+
+/**
+ * Search for research papers on a disease-gene combination.
+ */
+export async function searchPapers(
+  request: PaperSearchRequest,
+): Promise<PaperSearchResponse> {
+  const res = await fetch(`${API_BASE}/search/papers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    throw new Error(`API error ${res.status}: ${res.statusText}`);
+  }
+  return res.json() as Promise<PaperSearchResponse>;
+}

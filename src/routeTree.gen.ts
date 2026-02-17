@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StatisticsRouteImport } from './routes/statistics'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as ChatbotRouteImport } from './routes/chatbot'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DiseaseNameIndexRouteImport } from './routes/disease/$name/index'
 import { Route as DiseaseNameTypeIndexRouteImport } from './routes/disease/$name/$type/index'
@@ -23,6 +24,11 @@ const StatisticsRoute = StatisticsRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatbotRoute = ChatbotRouteImport.update({
+  id: '/chatbot',
+  path: '/chatbot',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,6 +49,7 @@ const DiseaseNameTypeIndexRoute = DiseaseNameTypeIndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chatbot': typeof ChatbotRoute
   '/search': typeof SearchRoute
   '/statistics': typeof StatisticsRoute
   '/disease/$name/': typeof DiseaseNameIndexRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chatbot': typeof ChatbotRoute
   '/search': typeof SearchRoute
   '/statistics': typeof StatisticsRoute
   '/disease/$name': typeof DiseaseNameIndexRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chatbot': typeof ChatbotRoute
   '/search': typeof SearchRoute
   '/statistics': typeof StatisticsRoute
   '/disease/$name/': typeof DiseaseNameIndexRoute
@@ -67,6 +76,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/chatbot'
     | '/search'
     | '/statistics'
     | '/disease/$name/'
@@ -74,6 +84,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/chatbot'
     | '/search'
     | '/statistics'
     | '/disease/$name'
@@ -81,6 +92,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/chatbot'
     | '/search'
     | '/statistics'
     | '/disease/$name/'
@@ -89,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChatbotRoute: typeof ChatbotRoute
   SearchRoute: typeof SearchRoute
   StatisticsRoute: typeof StatisticsRoute
   DiseaseNameIndexRoute: typeof DiseaseNameIndexRoute
@@ -109,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chatbot': {
+      id: '/chatbot'
+      path: '/chatbot'
+      fullPath: '/chatbot'
+      preLoaderRoute: typeof ChatbotRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -137,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChatbotRoute: ChatbotRoute,
   SearchRoute: SearchRoute,
   StatisticsRoute: StatisticsRoute,
   DiseaseNameIndexRoute: DiseaseNameIndexRoute,

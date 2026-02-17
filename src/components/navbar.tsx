@@ -9,6 +9,7 @@ import Button from '@mui/material/Button';
 const navItems = {
     'Home': '/',
     'Search': '/search',
+    'Chatbot': '/chatbot',
     'Statistics': '/statistics',
     'Developers': '/developers',
     'Help & FAQ': '/help'

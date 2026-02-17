@@ -18,12 +18,12 @@ export const Route = createFileRoute('/disease/$name/')({
 })
 
 const dataCards: Array<{ title: string; key: EntityType; icon: string; color: string }> = [
-  { title: 'Genes', key: 'genes', icon: '🧬', color: '#e3f2fd' },
-  { title: 'Proteins', key: 'proteins', icon: '🔬', color: '#f3e5f5' },
-  { title: 'Images', key: 'images', icon: '🖼️', color: '#e8f5e9' },
-  { title: 'GEO', key: 'geo', icon: '📊', color: '#fff3e0' },
-  { title: 'ClinVar', key: 'clinvar', icon: '🏥', color: '#fce4ec' },
-  { title: 'Pathways', key: 'pathways', icon: '🗺️', color: '#e0f7fa' },
+  { title: 'Genes', key: 'genes', icon: '/icons/gene.png', color: '#e3f2fd' },
+  { title: 'Proteins', key: 'proteins', icon: '/icons/protein.png', color: '#f3e5f5' },
+  { title: 'Images', key: 'images', icon: '/icons/image.png', color: '#e8f5e9' },
+  { title: 'GEO', key: 'geo', icon: '/icons/geo.png', color: '#fff3e0' },
+  { title: 'ClinVar', key: 'clinvar', icon: '/icons/clinvar.png', color: '#fce4ec' },
+  { title: 'Pathways', key: 'pathways', icon: '/icons/pathway.png', color: '#e0f7fa' },
 ]
 
 function RouteComponent() {
@@ -118,7 +118,7 @@ function RouteComponent() {
                   }}
                 >
                   <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography sx={{ fontSize: 36, mb: 1 }}>{card.icon}</Typography>
+                    <img src={card.icon} alt={card.title} style={{ width: 48, height: 48, marginBottom: 8, objectFit: 'contain', display: 'block', marginLeft: 'auto', marginRight: 'auto' }} />
                     <Typography variant="h6" sx={{ color: 'text.primary', mb: 0.5 }}>
                       {card.title}
                     </Typography>
