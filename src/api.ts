@@ -132,6 +132,12 @@ export interface DiseaseListResult {
   diseases: Array<Disease>;
 }
 
+export interface DiseaseDescriptionResponse {
+  disease_id: number;
+  name: string;
+  description: string | null;
+}
+
 export type EntityType = "genes" | "proteins" | "clinvar" | "geo" | "pathways" | "images";
 
 // ── Fetchers ─────────────────────────────────────────────────────────────────
@@ -232,6 +238,17 @@ export async function getDiseaseByName(
   );
   if (exact) return exact;
   return result.diseases[0] ?? null;
+}
+
+/**
+ * Get disease description by disease ID.
+ */
+export function getDiseaseDescription(
+  diseaseId: number,
+): Promise<DiseaseDescriptionResponse> {
+  return fetchJson<DiseaseDescriptionResponse>(
+    `${API_BASE}/diseases/${diseaseId}/description`,
+  );
 }
 
 /**

@@ -10,8 +10,9 @@ import Link from '@mui/material/Link'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 import Chip from '@mui/material/Chip'
-import type { Disease, EntityType } from '@/api'
-import { getDiseaseByName } from '@/api'
+import Skeleton from '@mui/material/Skeleton'
+import type { Disease, EntityType, DiseaseDescriptionResponse } from '@/api'
+import { getDiseaseByName, getDiseaseDescription } from '@/api'
 
 export const Route = createFileRoute('/disease/$name/')({
   component: RouteComponent,
@@ -20,8 +21,8 @@ export const Route = createFileRoute('/disease/$name/')({
 const dataCards: Array<{ title: string; key: EntityType; icon: string; color: string }> = [
   { title: 'Genes', key: 'genes', icon: '/icons/gene.png', color: '#e3f2fd' },
   { title: 'Proteins', key: 'proteins', icon: '/icons/protein.png', color: '#f3e5f5' },
-  { title: 'Images', key: 'images', icon: '/icons/image.png', color: '#e8f5e9' },
-  { title: 'GEO', key: 'geo', icon: '/icons/geo.png', color: '#fff3e0' },
+  { title: 'Image Datasets', key: 'images', icon: '/icons/image.png', color: '#e8f5e9' },
+  { title: 'GEO Studies', key: 'geo', icon: '/icons/geo.png', color: '#fff3e0' },
   { title: 'ClinVar', key: 'clinvar', icon: '/icons/clinvar.png', color: '#fce4ec' },
   { title: 'Pathways', key: 'pathways', icon: '/icons/pathway.png', color: '#e0f7fa' },
 ]
@@ -29,21 +30,32 @@ const dataCards: Array<{ title: string; key: EntityType; icon: string; color: st
 function RouteComponent() {
   const { name } = Route.useParams()
   const [disease, setDisease] = useState<Disease | null>(null)
+  const [description, setDescription] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [descriptionLoading, setDescriptionLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
+    setDescriptionLoading(true)
     setError(null)
     getDiseaseByName(name)
       .then((data) => {
         if (!data) {
           setError('Disease not found')
+          setDescriptionLoading(false)
         } else {
           setDisease(data)
+          getDiseaseDescription(data.disease_id)
+            .then((descData) => setDescription(descData.description))
+            .catch(() => setDescription(null))
+            .finally(() => setDescriptionLoading(false))
         }
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        setError(err.message)
+        setDescriptionLoading(false)
+      })
       .finally(() => setLoading(false))
   }, [name])
 
@@ -81,12 +93,17 @@ function RouteComponent() {
           <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 2 }}>
             {disease.name}
           </Typography>
-          <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.7 }}>
-            Explore the biological and clinical data associated with{' '}
-            <strong>{disease.name}</strong>. Click on any of the categories below to view detailed
-            information about genes, proteins, clinical variants, GEO datasets, KEGG pathways, and
-            image datasets linked to this disease.
-          </Typography>
+          {descriptionLoading ? (
+            <Box>
+              <Skeleton variant="text" sx={{ fontSize: '1rem' }} />
+              <Skeleton variant="text" sx={{ fontSize: '1rem' }} />
+              <Skeleton variant="text" sx={{ fontSize: '1rem', width: '60%' }} />
+            </Box>
+          ) : (
+            <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.7 }}>
+              {description ?? `Explore the biological and clinical data associated with ${disease.name}. Click on any of the categories below to view detailed information about genes, proteins, clinical variants, GEO datasets, KEGG pathways, and image datasets linked to this disease.`}
+            </Typography>
+          )}
         </Box>
       </Box>
 
