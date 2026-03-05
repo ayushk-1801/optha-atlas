@@ -104,10 +104,12 @@ export interface Pathway {
 
 export interface ImageDataset {
   id: number;
+  dataset_name: string;
   dataset_link: string;
   paper_link: string | null;
   healthy_count: number | null;
   disease_count: number | null;
+  image_size: string | null;
   source_platform: string | null;
   created_at: string | null;
 }
