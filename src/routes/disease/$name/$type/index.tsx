@@ -148,6 +148,7 @@ const PATHWAY_COLUMNS: Array<ColumnDef<Pathway>> = [
 ]
 
 const IMAGE_COLUMNS: Array<ColumnDef<ImageDataset>> = [
+  { key: 'dataset_name', label: 'Name', width: 150 },
   { key: 'source_platform', label: 'Platform', width: 120 },
   {
     key: 'dataset_link',
@@ -179,6 +180,7 @@ const IMAGE_COLUMNS: Array<ColumnDef<ImageDataset>> = [
   },
   { key: 'healthy_count', label: 'Healthy', width: 80 },
   { key: 'disease_count', label: 'Disease', width: 80 },
+  { key: 'image_size', label: 'Image Size', width: 100 },
 ]
 
 const COLUMN_MAP: Record<string, Array<ColumnDef<any>>> = {
